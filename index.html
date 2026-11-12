@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>رصد بازار</title>
+<meta name="description" content="رصد خودکار خبر، قیمت و تقویم اقتصادی بازار فارکس، طلا و ارز دیجیتال">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f4f1; --surface: #fcfcfb; --border: #e3e2dc; --grid: #ecebe6;
+  --text: #0b0b0b; --text2: #52514e; --muted: #8b8a82;
+  --series: #2a78d6; --good: #0ca30c; --bad: #d03b3b; --warn: #fab219;
+  --chip: #eeede8; --sel: #e6effb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2f2f2c; --grid: #262624;
+    --text: #f0efec; --text2: #c3c2b7; --muted: #8b8a82;
+    --series: #3987e5; --chip: #262624; --sel: #1b2a40;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --border: #2f2f2c; --grid: #262624;
+  --text: #f0efec; --text2: #c3c2b7; --muted: #8b8a82;
+  --series: #3987e5; --chip: #262624; --sel: #1b2a40;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: Vazirmatn, Tahoma, sans-serif; font-size: 14px; line-height: 1.7;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
+
+header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+header.top h1 { font-size: 20px; margin: 0; font-weight: 800; }
+header.top p { margin: 0; color: var(--text2); font-size: 13px; }
+header.top .spacer { flex: 1; }
+.updated { color: var(--text2); font-size: 12px; }
+.icon-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 4px 10px; font-size: 12px; }
+
+.notice { border: 1px solid var(--border); border-inline-start: 4px solid var(--warn); background: var(--surface);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; font-size: 13px; color: var(--text2); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.tile { text-align: start; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px 6px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile[aria-pressed="true"] { border-color: var(--series); background: var(--sel); }
+.tile .name { font-size: 12px; color: var(--text2); display: flex; justify-content: space-between; gap: 6px; }
+.tile .name .sym { color: var(--muted); font-size: 11px; direction: ltr; }
+.tile .price { font-size: 17px; font-weight: 700; text-align: left; }
+.tile .delta { font-size: 12px; text-align: left; }
+.tile svg { width: 100%; height: 26px; display: block; margin-top: 2px; }
+.tile svg polyline { fill: none; stroke: var(--muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.tile .stale { font-size: 10px; color: var(--muted); }
+.up { color: var(--good); } .down { color: var(--bad); } .flat { color: var(--muted); }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; min-width: 0; }
+.card h2 { font-size: 15px; margin: 0 0 4px; font-weight: 700; }
+.card .sub { color: var(--text2); font-size: 12px; margin: 0 0 10px; }
+
+.chart-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.chart-head .big { font-size: 22px; font-weight: 800; }
+.readout { min-height: 44px; font-size: 12px; color: var(--text2); margin: 4px 0 6px; }
+.readout b { color: var(--text); font-weight: 700; }
+.readout .news-line { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chart { height: 320px; direction: ltr; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text2); margin-top: 8px; }
+
+.toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.chip { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 12px; font-size: 12px; }
+.chip[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.toolbar .gap { flex: 1; }
+
+.news-list { display: flex; flex-direction: column; gap: 10px; }
+.news { border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.news .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--text2); }
+.news h3 { font-size: 15px; margin: 6px 0 4px; font-weight: 700; line-height: 1.6; }
+.news ul { margin: 0 0 8px; padding-inline-start: 18px; color: var(--text2); }
+.badge { display: inline-flex; align-items: center; gap: 5px; background: var(--chip); border-radius: 6px; padding: 0 8px; font-size: 12px; color: var(--text); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+.dot.high { background: var(--bad); } .dot.medium { background: var(--warn); }
+.asset-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 6px 0 0; border-top: 1px dashed var(--border); margin-top: 6px; font-size: 12px; }
+.asset-btn { border: 1px solid var(--border); background: var(--chip); border-radius: 6px; padding: 0 8px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+.asset-row .reason { color: var(--text2); flex-basis: 100%; }
+.outcome { background: var(--chip); border-radius: 6px; padding: 0 6px; display: inline-flex; gap: 4px; }
+.empty { color: var(--text2); font-size: 13px; padding: 16px 0; text-align: center; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: start; font-weight: 600; color: var(--text2); padding: 4px 6px; border-bottom: 1px solid var(--border); }
+td { padding: 6px; border-bottom: 1px solid var(--grid); }
+td.n, th.n { text-align: left; }
+details { margin-top: 10px; font-size: 12.5px; }
+summary { cursor: pointer; color: var(--text2); }
+
+.cal-day { font-size: 12px; font-weight: 700; color: var(--text2); margin: 12px 0 2px; }
+.cal-row { display: grid; grid-template-columns: 44px 38px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; align-items: start; }
+.cal-row.past { opacity: .5; }
+.cal-row .title { direction: ltr; text-align: left; overflow-wrap: anywhere; }
+.cal-row .extra { color: var(--text2); font-size: 11.5px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.cal-row .cur { font-weight: 700; direction: ltr; }
+.cal-list { max-height: 520px; overflow-y: auto; }
+
+footer { margin: 18px 0 8px; color: var(--text2); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>رصد بازار</h1>
+      <p>خبر، قیمت و تقویم اقتصادی فارکس، طلا و ارز دیجیتال</p>
+    </div>
+    <span class="spacer"></span>
+    <span class="updated" id="updated"></span>
+    <button class="icon-btn" id="theme-btn" type="button">حالت تیره</button>
+  </header>
+
+  <div id="notice"></div>
+  <section class="tiles" id="tiles" aria-label="قیمت دارایی‌ها"></section>
+
+  <div class="layout">
+    <div class="col">
+      <section class="card" id="chart-card">
+        <div class="chart-head">
+          <h2 id="chart-title"></h2>
+          <span class="big num" id="chart-price"></span>
+          <span class="num" id="chart-delta"></span>
+        </div>
+        <div class="readout" id="readout"></div>
+        <div id="chart"></div>
+        <div class="legend">
+          <span>نشانه‌های روی نمودار، خبرهای مربوط به این دارایی‌اند:</span>
+          <span><span class="up">▲</span> خبر صعودی</span>
+          <span><span class="down">▼</span> خبر نزولی</span>
+          <span><span class="flat">●</span> خبر خنثی</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>خبرها</h2>
+        <div class="toolbar" id="news-toolbar"></div>
+        <div class="news-list" id="news-list"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card">
+        <h2>دقت پیش‌بینی جهت</h2>
+        <p class="sub">قیمت هر دارایی ۱، ۴ و ۲۴ ساعت بعد از ثبت خبر با قیمت لحظه‌ی ثبت مقایسه می‌شود تا معلوم شود جهتی که هوش مصنوعی گفته درست بوده یا نه.</p>
+        <div id="stats"></div>
+      </section>
+
+      <section class="card">
+        <h2>تقویم اقتصادی این هفته</h2>
+        <p class="sub">ساعت‌ها به وقت تهران است.</p>
+        <div class="toolbar" id="cal-toolbar"></div>
+        <div class="cal-list" id="calendar"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    این صفحه به‌صورت خودکار و با کمک هوش مصنوعی تولید می‌شود و <b>توصیه‌ی سرمایه‌گذاری نیست</b>. تحلیل‌ها ممکن است اشتباه باشند.<br>
+    منابع قیمت: Binance، Yahoo Finance، Wallex — تقویم: Forex Factory
+  </footer>
+</div>
+
+<script>
+'use strict';
+const S = { prices: null, news: [], calendar: [], stats: null, sel: 'BTC', filter: 'all', hiOnly: false, calLevel: 'medium' };
+const TZ = 'Asia/Tehran', LOC = 'fa-IR-u-nu-latn';
+const fmtTime = new Intl.DateTimeFormat(LOC, { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const fmtDay = new Intl.DateTimeFormat(LOC, { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long' });
+const fmtDayShort = new Intl.DateTimeFormat(LOC, { timeZone: TZ, day: 'numeric', month: 'short' });
+const DIR = { bullish: ['▲', 'صعودی', 'up'], bearish: ['▼', 'نزولی', 'down'], neutral: ['●', 'خنثی', 'flat'] };
+const EVENT_FA = { monetary_policy: 'سیاست پولی', economic_data: 'داده‌ی اقتصادی', regulation: 'قانون‌گذاری',
+  etf_institutional: 'ETF و نهادها', security_hack: 'هک و امنیت', exchange_listing: 'صرافی', geopolitics: 'ژئوپلیتیک',
+  corporate: 'شرکت‌ها', market_move: 'حرکت بازار', technical_analysis: 'تحلیل تکنیکال', other: 'سایر' };
+const HORIZON_FA = { intraday: 'درون‌روز', days: 'چندروزه', weeks: 'چندهفته‌ای' };
+const OUTCOME_FA = { '1h': '۱ ساعت بعد', '4h': '۴ ساعت بعد', '24h': '۲۴ ساعت بعد' };
+const IMPACT_FA = { high: 'مهم', medium: 'متوسط', low: 'کم' };
+
+// ───── helpers ─────
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) e.append(kid);
+  return e;
+}
+const $ = id => document.getElementById(id);
+const fill = (node, ...kids) => node.replaceChildren(...kids.flat().filter(k => k != null));
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const fmtPrice = (v, d) => Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtPct = (v, d = 2) => (v > 0 ? '+' : '') + Number(v).toFixed(d) + '%';
+const priceText = a => a.unit === '$' ? '$' + fmtPrice(a.price, a.decimals) : fmtPrice(a.price, a.decimals);
+function ago(ts) {
+  const m = Math.max(0, Math.round((Date.now() / 1000 - ts) / 60));
+  if (m < 1) return 'همین حالا';
+  if (m < 60) return m + ' دقیقه پیش';
+  if (m < 60 * 24) return Math.round(m / 60) + ' ساعت پیش';
+  return Math.round(m / 1440) + ' روز پیش';
+}
+function deltaNode(change, cls) {
+  if (change == null) return el('span', { class: cls + ' flat', text: '—' });
+  const kind = change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+  return el('span', { class: cls },
+    el('span', { class: kind, text: change > 0 ? '▲ ' : change < 0 ? '▼ ' : '● ' }),
+    el('span', { class: 'num', text: fmtPct(change) }));
+}
+function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : null; }
+function hexA(hex, alpha) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${alpha})`;
+}
+function history(sym) {
+  const out = [], hist = (S.prices?.assets?.[sym]?.history || []).slice().sort((a, b) => a[0] - b[0]);
+  for (const [t, p] of hist) if (!out.length || t > out[out.length - 1][0]) out.push([t, p]);
+  return out;
+}
+
+// ───── tiles ─────
+function sparkline(hist) {
+  const step = Math.max(1, Math.floor(hist.length / 60)), pts = hist.filter((_, i) => i % step === 0 || i === hist.length - 1);
+  const vals = pts.map(p => p[1]), lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 100 26'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+  line.setAttribute('points', pts.map((p, i) => `${(i / (pts.length - 1) * 100).toFixed(1)},${(23 - (p[1] - lo) / span * 20).toFixed(1)}`).join(' '));
+  svg.append(line);
+  return svg;
+}
+function renderTiles() {
+  const box = $('tiles'); fill(box);
+  for (const [sym, a] of Object.entries(S.prices.assets)) {
+    const hist = history(sym);
+    box.append(el('button', { class: 'tile', type: 'button', 'aria-pressed': String(sym === S.sel), onclick: () => select(sym) },
+      el('span', { class: 'name' }, el('span', { text: a.name_fa }), el('span', { class: 'sym', text: sym })),
+      el('span', { class: 'price num', text: priceText(a) }),
+      deltaNode(a.change_24h, 'delta'),
+      hist.length > 2 ? sparkline(hist) : null,
+      a.stale ? el('span', { class: 'stale', text: 'به‌روز نشده' }) : null));
+  }
+}
+
+// ───── chart ─────
+let chart, series, barNews = new Map();
+function chartColors() {
+  return {
+    layout: { background: { type: 'solid', color: cssVar('--surface') }, textColor: cssVar('--text2'), fontFamily: 'Vazirmatn, Tahoma, sans-serif', fontSize: 11 },
+    grid: { vertLines: { visible: false }, horzLines: { color: cssVar('--grid') } },
+  };
+}
+function initChart() {
+  chart = LightweightCharts.createChart($('chart'), {
+    autoSize: true, ...chartColors(),
+    rightPriceScale: { borderVisible: false },
+    timeScale: {
+      borderVisible: false, timeVisible: true, secondsVisible: false,
+      tickMarkFormatter: (t, type) => type >= 3 ? fmtTime.format(t * 1000) : fmtDayShort.format(t * 1000),
+    },
+    localization: { timeFormatter: t => fmtDayShort.format(t * 1000) + ' ' + fmtTime.format(t * 1000) },
+    crosshair: { horzLine: { visible: false, labelVisible: false } },
+    // چرخ ماوس و کشیدن عمودی برای اسکرول خود صفحه آزاد می‌ماند
+    handleScroll: { mouseWheel: false, vertTouchDrag: false },
+    handleScale: { mouseWheel: false, axisPressedMouseMove: false },
+  });
+  // هر بار عرض نمودار عوض شود (تغییر اندازه‌ی پنجره یا محور قیمت)، کل بازه دوباره جا داده می‌شود
+  chart.timeScale().subscribeSizeChange(() => chart.timeScale().fitContent());
+  series = chart.addAreaSeries({ lineWidth: 2, priceLineVisible: false, crosshairMarkerRadius: 4 });
+  chart.subscribeCrosshairMove(p => {
+    const point = p.time != null && p.seriesData ? p.seriesData.get(series) : null;
+    renderReadout(point ? { time: p.time, value: point.value } : null);
+  });
+}
+function paintChart() {
+  chart.applyOptions(chartColors());
+  const c = cssVar('--series');
+  series.applyOptions({ lineColor: c, topColor: hexA(c, 0.16), bottomColor: hexA(c, 0), crosshairMarkerBackgroundColor: c, crosshairMarkerBorderColor: cssVar('--surface') });
+  renderMarkers();
+}
+function nearestBar(hist, ts) {
+  let best = null;
+  for (const [t] of hist) if (best == null || Math.abs(t - ts) < Math.abs(best - ts)) best = t;
+  return best;
+}
+function renderMarkers() {
+  const hist = history(S.sel), markers = [];
+  barNews = new Map();
+  if (hist.length) {
+    for (const item of S.news) {
+      const a = item.assets.find(x => x.symbol === S.sel);
+      if (!a || item.ref_ts < hist[0][0] - 3600) continue;
+      const t = nearestBar(hist, item.ref_ts);
+      if (!barNews.has(t)) barNews.set(t, []);
+      barNews.get(t).push(item);
+      markers.push({
+        time: t, size: 1,
+        position: a.direction === 'bullish' ? 'belowBar' : 'aboveBar',
+        shape: a.direction === 'bullish' ? 'arrowUp' : a.direction === 'bearish' ? 'arrowDown' : 'circle',
+        color: a.direction === 'bullish' ? cssVar('--good') : a.direction === 'bearish' ? cssVar('--bad') : cssVar('--muted'),
+      });
+    }
+  }
+  series.setMarkers(markers.sort((x, y) => x.time - y.time));
+}
+function renderChart() {
+  const a = S.prices.assets[S.sel], hist = history(S.sel);
+  $('chart-title').textContent = `${a.name_fa} (${S.sel})`;
+  $('chart-price').textContent = priceText(a);
+  fill($('chart-delta'), deltaNode(a.change_24h, ''), el('span', { text: ' در ۲۴ ساعت', style: 'color:var(--text2);font-size:12px' }));
+  series.applyOptions({ priceFormat: { type: 'price', precision: a.decimals, minMove: 1 / 10 ** a.decimals } });
+  series.setData(hist.map(([t, p]) => ({ time: t, value: p })));
+  paintChart();
+  chart.timeScale().fitContent();
+  renderReadout(null);
+}
+function renderReadout(point) {
+  const a = S.prices.assets[S.sel], box = $('readout');
+  if (!point) {
+    fill(box, el('span', { text: 'نمودار ساعتی ۷ روز اخیر. برای دیدن قیمت و خبرهای هر ساعت، نشانگر را روی نمودار ببرید.' }));
+    return;
+  }
+  const items = barNews.get(point.time) || [];
+  fill(box, 
+    el('span', {}, el('b', { class: 'num', text: (a.unit === '$' ? '$' : '') + fmtPrice(point.value, a.decimals) }),
+      ' · ' + fmtDayShort.format(point.time * 1000) + '، ساعت ' + fmtTime.format(point.time * 1000)),
+    items.length ? el('span', { class: 'news-line', dir: 'auto', text: (items.length > 1 ? `${items.length} خبر: ` : 'خبر: ') + (items[0].title_fa || items[0].title) }) : null);
+}
+
+// ───── news ─────
+function marketsOf(item) {
+  const ms = new Set(item.assets.map(a => S.prices.assets[a.symbol]?.market).filter(Boolean));
+  if (!ms.size) ms.add(item.market === 'crypto' ? 'crypto' : 'forex');
+  return ms;
+}
+function chip(label, pressed, onclick) {
+  return el('button', { class: 'chip', type: 'button', 'aria-pressed': String(pressed), onclick, text: label });
+}
+function renderNewsToolbar() {
+  const setFilter = f => () => { S.filter = f; renderNews(); };
+  fill($('news-toolbar'), 
+    chip('همه', S.filter === 'all', setFilter('all')),
+    chip('کریپتو', S.filter === 'crypto', setFilter('crypto')),
+    chip('فارکس و کالا', S.filter === 'fx', setFilter('fx')),
+    chip('فقط ' + S.prices.assets[S.sel].name_fa, S.filter === 'asset', setFilter('asset')),
+    el('span', { class: 'gap' }),
+    chip('فقط پرتأثیر (۷ به بالا)', S.hiOnly, () => { S.hiOnly = !S.hiOnly; renderNews(); }));
+}
+function outcomeNode(a, key, move) {
+  if (move == null) return null;
+  const aligned = a.direction === 'bullish' ? move : a.direction === 'bearish' ? -move : null;
+  const flat = S.stats?.flat_pct ?? 0.05;
+  let mark = null;
+  if (aligned != null) mark = aligned >= flat ? el('span', { class: 'up', text: '✓ درست' }) : aligned <= -flat ? el('span', { class: 'down', text: '✗ غلط' }) : el('span', { class: 'flat', text: 'بی‌تغییر' });
+  return el('span', { class: 'outcome' }, el('span', { text: OUTCOME_FA[key] + ':' }), el('span', { class: 'num', text: fmtPct(move) }), mark);
+}
+function newsCard(item) {
+  const level = item.impact >= 7 ? 'high' : item.impact >= 4 ? 'medium' : 'low';
+  const url = safeUrl(item.url);
+  const card = el('article', { class: 'news' },
+    el('div', { class: 'meta' },
+      el('span', { class: 'badge' }, el('span', { class: 'dot ' + level }), `تأثیر ${item.impact} از 10`),
+      item.analyzer === 'gemini' ? el('span', { text: EVENT_FA[item.event_type] || 'سایر' }) : el('span', { text: 'بدون تحلیل هوش مصنوعی' }),
+      el('span', { text: '·' }), el('span', { text: ago(item.ref_ts), title: fmtDay.format(item.ref_ts * 1000) + ' ' + fmtTime.format(item.ref_ts * 1000) }),
+      el('span', { text: '·' }),
+      url ? el('a', { href: url, target: '_blank', rel: 'noopener noreferrer', dir: 'auto', text: item.source + ' ↗' }) : el('span', { dir: 'auto', text: item.source })),
+    el('h3', { dir: 'auto', text: item.title_fa || item.title }),
+    item.summary_fa?.length ? el('ul', {}, item.summary_fa.map(s => el('li', { text: s }))) : null);
+  for (const a of item.assets) {
+    const meta = S.prices.assets[a.symbol]; if (!meta) continue;
+    const [glyph, label, cls] = DIR[a.direction] || DIR.neutral;
+    const outs = Object.keys(OUTCOME_FA).map(k => outcomeNode(a, k, a.outcomes?.[k]));
+    card.append(el('div', { class: 'asset-row' },
+      el('button', { class: 'asset-btn', type: 'button', title: 'نمایش نمودار', onclick: () => { select(a.symbol); $('chart-card').scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
+        el('span', { text: meta.name_fa }), el('span', {}, el('span', { class: cls, text: glyph + ' ' }), label)),
+      item.analyzer === 'gemini' ? el('span', { text: `اطمینان ${Math.round(a.confidence * 100)}% · ${HORIZON_FA[a.horizon] || ''}` }) : null,
+      outs,
+      a.reason_fa ? el('span', { class: 'reason', text: a.reason_fa }) : null));
+  }
+  return card;
+}
+function renderNews() {
+  renderNewsToolbar();
+  const list = S.news.filter(item => {
+    if (S.hiOnly && item.impact < 7) return false;
+    if (S.filter === 'asset') return item.assets.some(a => a.symbol === S.sel);
+    if (S.filter === 'crypto') return marketsOf(item).has('crypto');
+    if (S.filter === 'fx') { const m = marketsOf(item); return m.has('forex') || m.has('commodity') || m.has('iran'); }
+    return true;
+  }).slice(0, 60);
+  fill($('news-list'), ...(list.length ? list.map(newsCard) : [el('div', { class: 'empty', text: 'خبری با این فیلتر پیدا نشد.' })]));
+}
+
+// ───── accuracy ─────
+function rateCell(s) { return s && s.n ? `${s.hit_rate}%` : '—'; }
+function renderStats() {
+  const box = $('stats'), st = S.stats;
+  if (!st) { fill(box, el('div', { class: 'empty', text: 'آمار در دسترس نیست.' })); return; }
+  const total = Object.values(st.overall).reduce((n, s) => n + s.n + s.flat, 0);
+  if (!total) {
+    fill(box, el('div', { class: 'empty', text: st.analyzer === 'gemini'
+      ? 'هنوز نتیجه‌ای ثبت نشده است. اولین نتیجه‌ها یک ساعت بعد از اولین خبرِ دارای جهت ثبت می‌شوند.'
+      : 'برای سنجش دقت باید تحلیل هوش مصنوعی فعال باشد.' }));
+    return;
+  }
+  const table = el('table', {},
+    el('thead', {}, el('tr', {}, el('th', { text: 'افق زمانی' }), el('th', { class: 'n', text: 'درست' }), el('th', { class: 'n', text: 'تعداد' }), el('th', { class: 'n', text: 'میانگین حرکت هم‌جهت' }))),
+    el('tbody', {}, Object.entries(st.overall).map(([k, s]) => el('tr', {},
+      el('td', { text: OUTCOME_FA[k] }),
+      el('td', { class: 'n num', text: rateCell(s) }),
+      el('td', { class: 'n', text: s.n ? `${s.hits} از ${s.n}` : '—' }),
+      el('td', { class: 'n num', text: s.avg_aligned == null ? '—' : fmtPct(s.avg_aligned, 3) })))));
+  const assets = Object.entries(st.by_asset || {});
+  const detail = assets.length ? el('details', {}, el('summary', { text: 'به تفکیک دارایی' }),
+    el('table', {},
+      el('thead', {}, el('tr', {}, el('th', { text: 'دارایی' }), Object.keys(st.overall).map(k => el('th', { class: 'n', text: OUTCOME_FA[k] })))),
+      el('tbody', {}, assets.map(([sym, hs]) => el('tr', {},
+        el('td', { text: S.prices.assets[sym]?.name_fa || sym }),
+        Object.keys(st.overall).map(k => el('td', { class: 'n num', text: hs[k]?.n ? `${hs[k].hit_rate}% (${hs[k].n})` : '—' }))))))) : null;
+  fill(box, table, detail,
+    el('p', { class: 'sub', style: 'margin-top:10px', text: `حرکت‌های کمتر از ${st.flat_pct}% «بی‌تغییر» حساب می‌شوند و در ستون «درست» نمی‌آیند. با تعداد کم، این عددها هنوز قابل اتکا نیستند. نرخ نزدیک به 50% یعنی پیش‌بینی‌ها بهتر از شیر یا خط نبوده‌اند.` }));
+}
+
+// ───── calendar ─────
+function renderCalendar() {
+  const levels = { high: ['high'], medium: ['high', 'medium'], all: ['high', 'medium', 'low'] };
+  const set = l => () => { S.calLevel = l; renderCalendar(); };
+  fill($('cal-toolbar'), chip('مهم', S.calLevel === 'high', set('high')), chip('مهم و متوسط', S.calLevel === 'medium', set('medium')), chip('همه', S.calLevel === 'all', set('all')));
+  const now = Date.now() / 1000;
+  const events = S.calendar.filter(e => levels[S.calLevel].includes(e.impact) && e.ts > now - 2 * 3600);
+  const box = $('calendar'); fill(box);
+  if (!events.length) { box.append(el('div', { class: 'empty', text: 'رویداد دیگری برای این هفته نمانده است.' })); return; }
+  let day = '';
+  for (const e of events) {
+    const d = fmtDay.format(e.ts * 1000);
+    if (d !== day) { day = d; box.append(el('div', { class: 'cal-day', text: d })); }
+    box.append(el('div', { class: 'cal-row' + (e.ts < now ? ' past' : '') },
+      el('span', { class: 'num', text: fmtTime.format(e.ts * 1000) }),
+      el('span', { class: 'cur', text: e.currency }),
+      el('div', {},
+        el('div', { class: 'title', text: e.title }),
+        el('div', { class: 'extra' },
+          e.previous ? el('span', {}, 'قبلی: ', el('span', { class: 'num', text: e.previous })) : null,
+          e.forecast ? el('span', {}, 'پیش‌بینی: ', el('span', { class: 'num', text: e.forecast })) : null,
+          el('span', { class: 'badge' }, el('span', { class: 'dot ' + e.impact }), IMPACT_FA[e.impact])))));
+  }
+}
+
+// ───── app ─────
+function select(sym) {
+  if (!S.prices.assets[sym]) return;
+  S.sel = sym;
+  renderTiles(); renderChart(); renderNews();
+}
+function renderAll() {
+  if (!S.prices || !Object.keys(S.prices.assets || {}).length) {
+    fill($('notice'), el('div', { class: 'notice', text: 'هنوز داده‌ای وجود ندارد. یک بار «python main.py» را اجرا کنید تا پوشه‌ی data ساخته شود.' }));
+    return;
+  }
+  if (!S.prices.assets[S.sel]) S.sel = Object.keys(S.prices.assets)[0];
+  $('updated').textContent = 'به‌روزرسانی: ' + ago(S.prices.updated);
+  fill($('notice'), ...(S.stats && S.stats.analyzer !== 'gemini'
+    ? [el('div', { class: 'notice', text: 'تحلیل هوش مصنوعی فعال نیست (کلید GEMINI_API_KEY تنظیم نشده). خبرها فقط با کلیدواژه برچسب خورده‌اند و ترجمه، جهت و سنجش دقت ندارند.' })] : []));
+  renderTiles(); renderChart(); renderNews(); renderStats(); renderCalendar();
+}
+async function load() {
+  const get = name => fetch(`data/${name}.json?t=${Date.now()}`).then(r => r.ok ? r.json() : null).catch(() => null);
+  const [prices, news, calendar, stats] = await Promise.all(['prices', 'news', 'calendar', 'stats'].map(get));
+  S.prices = prices; S.news = news || []; S.calendar = calendar?.events || []; S.stats = stats;
+  renderAll();
+}
+function initTheme() {
+  const btn = $('theme-btn'), root = document.documentElement;
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const sync = () => { btn.textContent = isDark() ? 'حالت روشن' : 'حالت تیره'; if (S.prices && chart) paintChart(); };
+  try { const saved = localStorage.getItem('theme'); if (saved) root.dataset.theme = saved; } catch (e) {}
+  btn.addEventListener('click', () => {
+    root.dataset.theme = isDark() ? 'light' : 'dark';
+    try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+    sync();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sync);
+  sync();
+}
+initTheme();
+initChart();
+load();
+setInterval(load, 5 * 60 * 1000);
+</script>
+</body>
+</html>

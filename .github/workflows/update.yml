@@ -1,0 +1,51 @@
+name: Update market radar
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 minutes (GitHub may delay scheduled runs)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python tests/test_smoke.py
+
+      - name: Update data
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODELS: ${{ vars.GEMINI_MODELS }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
+        run: python main.py
+
+      - name: Commit data
+        run: |
+          git config user.name "rasad-bot"
+          git config user.email "rasad-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "data: update feeds"
+            git push || (git pull --rebase && git push)
+          fi
